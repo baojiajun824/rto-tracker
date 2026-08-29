@@ -138,6 +138,72 @@ final class RTOTrackerTests: XCTestCase {
         XCTAssertEqual(decoded.date(in: pacificCalendar).map { LocalDay($0, calendar: pacificCalendar) }, original)
     }
 
+    func testReminderScheduleSkipsPastTimeWeekendsAndEnteredDays() throws {
+        let now = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    year: 2025,
+                    month: 1,
+                    day: 10,
+                    hour: 16
+                )
+            )
+        )
+        let enteredMonday = try date(2025, 1, 13)
+
+        let fireDates = ReminderSchedule.fireDates(
+            now: now,
+            reminderMinutes: 15 * 60,
+            selectedDays: [
+                LocalDay(enteredMonday, calendar: calendar): .workFromOffice
+            ],
+            horizonDays: 7,
+            limit: 2,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            fireDates.map { LocalDay($0, calendar: calendar) },
+            [
+                LocalDay(try date(2025, 1, 14), calendar: calendar),
+                LocalDay(try date(2025, 1, 15), calendar: calendar)
+            ]
+        )
+        XCTAssertTrue(
+            fireDates.allSatisfy {
+                calendar.component(.hour, from: $0) == 15
+                    && calendar.component(.minute, from: $0) == 0
+            }
+        )
+    }
+
+    @MainActor
+    func testReminderSettingsDefaultOffAndPersistLocally() throws {
+        let defaults = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
+        let settings = SettingsViewModel(defaults: defaults)
+
+        XCTAssertFalse(settings.reminderEnabled)
+        XCTAssertEqual(settings.reminderMinutes, 15 * 60)
+
+        settings.reminderEnabled = true
+        settings.reminderTime = try XCTUnwrap(
+            Calendar.current.date(
+                from: DateComponents(
+                    year: 2025,
+                    month: 1,
+                    day: 1,
+                    hour: 17,
+                    minute: 30
+                )
+            )
+        )
+
+        let reloadedSettings = SettingsViewModel(defaults: defaults)
+        XCTAssertTrue(reloadedSettings.reminderEnabled)
+        XCTAssertEqual(reloadedSettings.reminderMinutes, (17 * 60) + 30)
+    }
+
     @MainActor
     func testDirectSelectionPersistsAndCanClearADay() throws {
         let defaults = try makeDefaults()

@@ -2,6 +2,8 @@
 
 RTO Tracker is a small SwiftUI app for recording office, home, leave, and pending weekdays. It shows the office percentage for a selected date range and estimates how many pending days must become office days to reach a goal.
 
+An optional missing-entry reminder can notify the user once on weekdays at a chosen time. It is disabled by default and skips days that already have an entry.
+
 ## Calculation
 
 - Weekends and leave days are excluded.
@@ -11,7 +13,7 @@ RTO Tracker is a small SwiftUI app for recording office, home, leave, and pendin
 
 ## Data and privacy
 
-All calendar entries and settings are stored locally on the device. The app has no accounts, analytics, network requests, or cloud synchronization. Clearing the app's calendar data from Settings is permanent.
+All calendar entries, reminder preferences, and scheduled reminders stay on the device. The app has no accounts, analytics, network requests, remote push notifications, or cloud synchronization. Clearing the app's calendar data from Settings is permanent.
 
 Existing calendar entries from version 1.3 are migrated to the current date-only storage format the first time they are loaded.
 

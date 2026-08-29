@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @ObservedObject var calendarViewModel: CalendarViewModel
+    @ObservedObject var reminderScheduler: ReminderScheduler
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var showClearConfirmation = false
+    @State private var showNotificationPermissionAlert = false
+    @State private var isRequestingNotificationPermission = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +40,38 @@ struct SettingsView: View {
                     Text("When enabled, pending weekdays count as non-office days in the percentage. Leave and weekends are always excluded.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
+
+                Section("Reminder") {
+                    Toggle(
+                        "Missing Entry Reminder",
+                        isOn: Binding(
+                            get: { settingsViewModel.reminderEnabled },
+                            set: setReminderEnabled
+                        )
+                    )
+                    .disabled(isRequestingNotificationPermission)
+
+                    if settingsViewModel.reminderEnabled {
+                        DatePicker(
+                            "Reminder Time",
+                            selection: Binding(
+                                get: { settingsViewModel.reminderTime },
+                                set: { settingsViewModel.reminderTime = $0 }
+                            ),
+                            displayedComponents: .hourAndMinute
+                        )
+                    }
+
+                    if reminderScheduler.authorizationStatus == .denied {
+                        Button("Open Notification Settings") {
+                            openNotificationSettings()
+                        }
+                    }
+
+                    Text("When enabled, you’ll receive at most one reminder on weekdays when today has no entry.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -65,6 +102,55 @@ struct SettingsView: View {
             } message: {
                 Text("This removes every Office, Home, and Leave entry on this device. This action cannot be undone.")
             }
+            .alert("Notifications Are Off", isPresented: $showNotificationPermissionAlert) {
+                Button("Open Settings") {
+                    openNotificationSettings()
+                }
+                Button("Not Now", role: .cancel) {}
+            } message: {
+                Text("Allow notifications in iOS Settings to use missing-entry reminders.")
+            }
+            .task {
+                await reminderScheduler.updateAuthorizationStatus()
+            }
         }
+    }
+
+    private func setReminderEnabled(_ enabled: Bool) {
+        guard enabled else {
+            settingsViewModel.reminderEnabled = false
+            reminderScheduler.refresh(
+                enabled: false,
+                reminderMinutes: settingsViewModel.reminderMinutes,
+                selectedDays: calendarViewModel.selectedDays
+            )
+            return
+        }
+
+        isRequestingNotificationPermission = true
+        Task {
+            let granted = await reminderScheduler.requestAuthorization()
+            isRequestingNotificationPermission = false
+
+            guard granted else {
+                settingsViewModel.reminderEnabled = false
+                showNotificationPermissionAlert = true
+                return
+            }
+
+            settingsViewModel.reminderEnabled = true
+            reminderScheduler.refresh(
+                enabled: true,
+                reminderMinutes: settingsViewModel.reminderMinutes,
+                selectedDays: calendarViewModel.selectedDays
+            )
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
+            return
+        }
+        openURL(settingsURL)
     }
 }

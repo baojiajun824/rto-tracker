@@ -9,6 +9,7 @@ import SwiftUI
 
 struct CalendarView: View {
     @StateObject private var viewModel = CalendarViewModel()
+    @StateObject private var reminderScheduler = ReminderScheduler()
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showSettings = false
     @State private var currentDate = Date()
@@ -32,7 +33,8 @@ struct CalendarView: View {
                     LegendView()
                     SettingsButtonView(
                         showSettings: $showSettings,
-                        calendarViewModel: viewModel
+                        calendarViewModel: viewModel,
+                        reminderScheduler: reminderScheduler
                     )
                 }
                 .padding(.top, safeAreaInsets.top > 0 ? safeAreaInsets.top : 16)
@@ -56,6 +58,18 @@ struct CalendarView: View {
             }
         } message: {
             Text(viewModel.persistenceErrorMessage ?? "")
+        }
+        .task {
+            refreshReminders()
+        }
+        .onChange(of: viewModel.selectedDays) {
+            refreshReminders()
+        }
+        .onChange(of: settingsViewModel.reminderEnabled) {
+            refreshReminders()
+        }
+        .onChange(of: settingsViewModel.reminderMinutes) {
+            refreshReminders()
         }
     }
 
@@ -101,5 +115,13 @@ struct CalendarView: View {
     /// Generate the string for the current month and year
     private func monthYearString(for date: Date) -> String {
         date.formatted(.dateTime.month(.wide).year())
+    }
+
+    private func refreshReminders() {
+        reminderScheduler.refresh(
+            enabled: settingsViewModel.reminderEnabled,
+            reminderMinutes: settingsViewModel.reminderMinutes,
+            selectedDays: viewModel.selectedDays
+        )
     }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsButtonView: View {
     @Binding var showSettings: Bool
     @ObservedObject var calendarViewModel: CalendarViewModel
+    @ObservedObject var reminderScheduler: ReminderScheduler
 
     var body: some View {
         Button {
@@ -19,7 +20,10 @@ struct SettingsButtonView: View {
                 .frame(minHeight: 44)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(calendarViewModel: calendarViewModel)
+            SettingsView(
+                calendarViewModel: calendarViewModel,
+                reminderScheduler: reminderScheduler
+            )
         }
     }
 }
