@@ -9,14 +9,16 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @ObservedObject var calendarViewModel: CalendarViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var showClearConfirmation = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
-                // RTO Goal Section
-                Section(header: Text("RTO Goal")) {
+                Section("RTO Goal") {
                     HStack {
-                        Text("RTO Goal:")
+                        Text("Goal")
                         Spacer()
                         Text("\(Int(settingsViewModel.rtoGoal))%")
                     }
@@ -27,26 +29,42 @@ struct SettingsView: View {
                     )
                 }
 
-                // RTO Calculation Section
-                Section(header: Text("RTO Calculation")) {
+                Section("RTO Calculation") {
                     Toggle("Include Pending Days", isOn: $settingsViewModel.includePendingDays)
                         .toggleStyle(SwitchToggleStyle(tint: .green))
-                    Text("If enabled, pending days are considered as Work from Home.")
+                    Text("When enabled, pending weekdays count as non-office days in the percentage. Leave and weekends are always excluded.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
-                // Reset to Defaults Section
                 Section {
-                    Button(action: {
+                    Button("Reset Settings") {
                         settingsViewModel.resetToDefaults()
-                    }) {
-                        Text("Reset to Defaults")
-                            .foregroundColor(.red)
                     }
+                    Button("Clear Calendar Data", role: .destructive) {
+                        showClearConfirmation = true
+                    }
+                } footer: {
+                    Text("Calendar entries and settings stay on this device and are not uploaded.")
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .alert("Clear Calendar Data?", isPresented: $showClearConfirmation) {
+                Button("Clear", role: .destructive) {
+                    calendarViewModel.clearCalendarData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes every Office, Home, and Leave entry on this device. This action cannot be undone.")
+            }
         }
     }
 }

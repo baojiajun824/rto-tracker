@@ -10,14 +10,21 @@ import SwiftUI
 struct CalendarGridView: View {
     @ObservedObject var viewModel: CalendarViewModel
     @Binding var currentDate: Date
-    let width: CGFloat
-    let height: CGFloat
+
+    private struct DayCell: Identifiable {
+        enum ID: Hashable {
+            case placeholder(LocalDay, Int)
+            case day(LocalDay)
+        }
+
+        let id: ID
+        let date: Date?
+    }
 
     var body: some View {
-        VStack(spacing: height * 0.01) {
-            // Weekday Headers
+        VStack(spacing: 8) {
             HStack {
-                ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { day in
+                ForEach(weekdaySymbols, id: \.self) { day in
                     Text(day)
                         .frame(maxWidth: .infinity)
                         .font(.caption)
@@ -25,39 +32,66 @@ struct CalendarGridView: View {
                 }
             }
 
-            // Calendar Grid
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: height * 0.01) {
-                ForEach(Array(generateDays(for: currentDate).enumerated()), id: \.offset) { index, date in
-                    if let date = date {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7),
+                spacing: 4
+            ) {
+                ForEach(generateDays(for: currentDate)) { cell in
+                    if let date = cell.date {
                         let isWeekend = Calendar.current.isDateInWeekend(date)
-                        CalendarDayView(date: date, dayType: viewModel.selectedDays[date], isInteractable: !isWeekend)
-                            .onTapGesture {
-                                if !isWeekend {
-                                    viewModel.toggleDayType(for: date)
-                                }
+                        CalendarDayView(
+                            date: date,
+                            dayType: viewModel.dayType(for: date),
+                            isInteractable: !isWeekend,
+                            action: {
+                                viewModel.toggleDayType(for: date)
+                            },
+                            selectionAction: { type in
+                                viewModel.setDayType(type, for: date)
                             }
-                            .frame(height: height * 0.05)
+                        )
                     } else {
-                        Rectangle()
-                            .foregroundColor(.clear)
-                            .frame(height: height * 0.05)
+                        Color.clear
+                            .frame(width: 44, height: 44)
+                            .accessibilityHidden(true)
                     }
                 }
             }
         }
+        .padding(.horizontal, 4)
     }
 
-    private func generateDays(for date: Date) -> [Date?] {
+    private var weekdaySymbols: [String] {
         let calendar = Calendar.current
-        let firstDayOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
-        let weekdayOffset = calendar.component(.weekday, from: firstDayOfMonth) - 1
-        let daysInMonth = calendar.range(of: .day, in: .month, for: firstDayOfMonth)!
+        let symbols = calendar.shortStandaloneWeekdaySymbols
+        let firstIndex = max(0, min(calendar.firstWeekday - 1, symbols.count - 1))
+        return (0..<symbols.count).map { symbols[(firstIndex + $0) % symbols.count] }
+    }
 
-        let leadingEmptyCells: [Date?] = Array(repeating: nil, count: weekdayOffset)
-        let monthDays = daysInMonth.compactMap { day -> Date? in
-            return calendar.date(byAdding: .day, value: day - 1, to: firstDayOfMonth)
+    private func generateDays(for date: Date) -> [DayCell] {
+        let calendar = Calendar.current
+        guard
+            let firstDayOfMonth = calendar.date(
+                from: calendar.dateComponents([.year, .month], from: date)
+            ),
+            let daysInMonth = calendar.range(of: .day, in: .month, for: firstDayOfMonth)
+        else {
+            return []
         }
 
-        return leadingEmptyCells + monthDays
+        let month = LocalDay(firstDayOfMonth, calendar: calendar)
+        let firstWeekday = calendar.component(.weekday, from: firstDayOfMonth)
+        let weekdayOffset = (firstWeekday - calendar.firstWeekday + 7) % 7
+        let leadingCells = (0..<weekdayOffset).map { index in
+            DayCell(id: .placeholder(month, index), date: nil)
+        }
+        let monthDays = daysInMonth.compactMap { day -> DayCell? in
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: firstDayOfMonth) else {
+                return nil
+            }
+            return DayCell(id: .day(LocalDay(date, calendar: calendar)), date: date)
+        }
+
+        return leadingCells + monthDays
     }
 }

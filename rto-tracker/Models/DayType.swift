@@ -25,4 +25,30 @@ enum DayType: String, Codable, CaseIterable {
             return .workFromOffice
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .workFromOffice:
+            return "Office"
+        case .workFromHome:
+            return "Home"
+        case .leave:
+            return "Leave"
+        case .default:
+            return "Pending"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .workFromOffice:
+            return "building.2.fill"
+        case .workFromHome:
+            return "house.fill"
+        case .leave:
+            return "airplane"
+        case .default:
+            return "circle.dotted"
+        }
+    }
 }

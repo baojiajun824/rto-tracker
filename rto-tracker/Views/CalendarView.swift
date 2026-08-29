@@ -19,37 +19,43 @@ struct CalendarView: View {
             let height = geometry.size.height
             let safeAreaInsets = geometry.safeAreaInsets
 
-            VStack {
-                ScrollView {
-                    VStack(spacing: height * 0.02) {
-                        // Fancy Title
-                        CalendarTitleView()
-
-                        // Start Date and End Date
-                        DatePickerView(viewModel: viewModel, width: width)
-
-                        // RTO % and Status
-                        RTOStatusView(viewModel: viewModel, settingsViewModel: _settingsViewModel, width: width, height: height)
-
-                        // Month Navigation Buttons
-                        monthNavigation(width: width)
-
-                        // Calendar Grid
-                        CalendarGridView(viewModel: viewModel, currentDate: $currentDate, width: width, height: height)
-
-                        // Legend
-                        LegendView()
-                            .padding(.top, height * 0.02)
-
-                        // Settings Button
-                        SettingsButtonView(showSettings: $showSettings)
-                            .padding(.top, height * 0.02)
-                    }
-                    .padding(.vertical, safeAreaInsets.top > 0 ? safeAreaInsets.top : height * 0.02) // Consider safe area
-                    .padding(.bottom, safeAreaInsets.bottom) // Avoid home indicator overlap
+            ScrollView {
+                VStack(spacing: max(height * 0.02, 12)) {
+                    CalendarTitleView()
+                    DatePickerView(viewModel: viewModel, width: width)
+                    RTOStatusView(viewModel: viewModel, width: width, height: height)
+                    monthNavigation(width: width)
+                    CalendarGridView(
+                        viewModel: viewModel,
+                        currentDate: $currentDate
+                    )
+                    LegendView()
+                    SettingsButtonView(
+                        showSettings: $showSettings,
+                        calendarViewModel: viewModel
+                    )
                 }
+                .padding(.top, safeAreaInsets.top > 0 ? safeAreaInsets.top : 16)
+                .padding(.bottom, max(safeAreaInsets.bottom, 16))
             }
-            .edgesIgnoringSafeArea([.horizontal]) // Ensure full horizontal use of the screen
+            .ignoresSafeArea(.container, edges: .horizontal)
+        }
+        .alert(
+            "Calendar Data Issue",
+            isPresented: Binding(
+                get: { viewModel.persistenceErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.dismissPersistenceError()
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                viewModel.dismissPersistenceError()
+            }
+        } message: {
+            Text(viewModel.persistenceErrorMessage ?? "")
         }
     }
 
@@ -59,16 +65,30 @@ struct CalendarView: View {
             Button(action: { adjustMonth(by: -1) }) {
                 Image(systemName: "chevron.left")
                     .font(.title2)
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Previous month")
             Spacer()
-            Text(monthYearString(for: currentDate))
-                .font(.headline)
-                .fontWeight(.bold)
+            VStack(spacing: 2) {
+                Text(monthYearString(for: currentDate))
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Button("Today") {
+                    withAnimation {
+                        currentDate = Date()
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .disabled(Calendar.current.isDate(currentDate, equalTo: Date(), toGranularity: .month))
+                .accessibilityLabel("Show current month")
+            }
             Spacer()
             Button(action: { adjustMonth(by: 1) }) {
                 Image(systemName: "chevron.right")
                     .font(.title2)
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Next month")
         }
         .padding(.horizontal, width * 0.05)
     }
@@ -80,8 +100,6 @@ struct CalendarView: View {
 
     /// Generate the string for the current month and year
     private func monthYearString(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: date)
+        date.formatted(.dateTime.month(.wide).year())
     }
 }

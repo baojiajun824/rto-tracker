@@ -6,198 +6,200 @@
 //
 
 import Foundation
+import OSLog
 
-class CalendarViewModel: ObservableObject {
-    @Published var selectedDays: [Date: DayType] = [:] {
-        didSet {
-            saveSelectedDays()
-        }
-    }
+@MainActor
+final class CalendarViewModel: ObservableObject {
+    static let selectedDaysKey = "selectedDays"
 
+    @Published private(set) var selectedDays: [LocalDay: DayType] = [:]
+    @Published private(set) var persistenceErrorMessage: String?
     @Published var startDate: Date = Date() {
         didSet {
-            saveDate(forKey: "startDate", date: startDate)
+            defaults.set(startDate, forKey: Keys.startDate)
         }
     }
-
     @Published var endDate: Date = Date() {
         didSet {
-            saveDate(forKey: "endDate", date: endDate)
+            defaults.set(endDate, forKey: Keys.endDate)
         }
     }
 
-    private let calendar = Calendar.current
-    private let userDefaultsKey = "selectedDays"
-
-    init() {
-        loadSelectedDays()
-        startDate = loadDate(forKey: "startDate") ?? Date()
-        endDate = loadDate(forKey: "endDate") ?? Date()
+    private enum Keys {
+        static let startDate = "startDate"
+        static let endDate = "endDate"
     }
 
-    // Save selectedDays to UserDefaults
-    private func saveSelectedDays() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let dataToSave = selectedDays.map { EncodableDay(date: $0.key, type: $0.value.rawValue) }
-        if let encoded = try? encoder.encode(dataToSave) {
-            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
-        }
+    private struct PersistencePayload: Codable {
+        let version: Int
+        let days: [StoredDay]
     }
 
-    // Load selectedDays from UserDefaults
-    private func loadSelectedDays() {
-        if let savedData = UserDefaults.standard.data(forKey: userDefaultsKey) {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            if let decoded = try? decoder.decode([EncodableDay].self, from: savedData) {
-                selectedDays = Dictionary(uniqueKeysWithValues: decoded.map { ($0.date, DayType(rawValue: $0.type) ?? .default) })
+    private struct StoredDay: Codable {
+        let day: LocalDay
+        let type: String
+    }
+
+    private struct LegacyStoredDay: Codable {
+        let date: Date
+        let type: String
+    }
+
+    private enum PersistenceError: LocalizedError {
+        case unsupportedVersion(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedVersion(let version):
+                return "Calendar data uses unsupported format version \(version)."
             }
         }
     }
 
-    // Save individual dates to UserDefaults
-    private func saveDate(forKey key: String, date: Date) {
-        let formatter = ISO8601DateFormatter()
-        let dateString = formatter.string(from: date)
-        UserDefaults.standard.set(dateString, forKey: key)
+    private let calendar: Calendar
+    private let defaults: UserDefaults
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "RTOTracker",
+        category: "CalendarPersistence"
+    )
+
+    init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
+        self.defaults = defaults
+        self.calendar = calendar
+
+        let today = Date()
+        let defaultStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: today)
+        ) ?? today
+        startDate = Self.loadDate(forKey: Keys.startDate, defaults: defaults) ?? defaultStart
+        endDate = Self.loadDate(forKey: Keys.endDate, defaults: defaults) ?? today
+        loadSelectedDays()
     }
 
-    // Load individual dates from UserDefaults
-    private func loadDate(forKey key: String) -> Date? {
+    var isDateRangeValid: Bool {
+        calendar.startOfDay(for: startDate) <= calendar.startOfDay(for: endDate)
+    }
+
+    func dayType(for date: Date) -> DayType? {
+        selectedDays[LocalDay(date, calendar: calendar)]
+    }
+
+    func toggleDayType(for date: Date) {
+        let day = LocalDay(date, calendar: calendar)
+        let nextType = selectedDays[day]?.next() ?? .workFromOffice
+        setDayType(nextType == .default ? nil : nextType, for: date)
+    }
+
+    func setDayType(_ type: DayType?, for date: Date) {
+        let day = LocalDay(date, calendar: calendar)
+        let storedType = type == .default ? nil : type
+        guard selectedDays[day] != storedType else {
+            return
+        }
+
+        if let storedType {
+            selectedDays[day] = storedType
+        } else {
+            selectedDays.removeValue(forKey: day)
+        }
+        saveSelectedDays()
+    }
+
+    func summary(targetRTO: Double, includePendingDays: Bool) -> RTOSummary? {
+        RTOCalculator.summary(
+            selectedDays: selectedDays,
+            start: startDate,
+            end: endDate,
+            targetRTO: targetRTO,
+            includePendingDays: includePendingDays,
+            calendar: calendar
+        )
+    }
+
+    func swapDateRange() {
+        let previousStart = startDate
+        startDate = endDate
+        endDate = previousStart
+    }
+
+    func clearCalendarData() {
+        selectedDays.removeAll()
+        defaults.removeObject(forKey: Self.selectedDaysKey)
+        persistenceErrorMessage = nil
+    }
+
+    func dismissPersistenceError() {
+        persistenceErrorMessage = nil
+    }
+
+    private func saveSelectedDays() {
+        let storedDays = selectedDays
+            .map { StoredDay(day: $0.key, type: $0.value.rawValue) }
+            .sorted { $0.day < $1.day }
+        let payload = PersistencePayload(version: 1, days: storedDays)
+
+        do {
+            defaults.set(try JSONEncoder().encode(payload), forKey: Self.selectedDaysKey)
+        } catch {
+            reportPersistenceError("Your latest calendar change could not be saved.", error: error)
+        }
+    }
+
+    private func loadSelectedDays() {
+        guard let savedData = defaults.data(forKey: Self.selectedDaysKey) else {
+            return
+        }
+
+        do {
+            if let payload = try? JSONDecoder().decode(PersistencePayload.self, from: savedData) {
+                guard payload.version == 1 else {
+                    throw PersistenceError.unsupportedVersion(payload.version)
+                }
+                selectedDays = makeDayDictionary(from: payload.days)
+                return
+            }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let legacyDays = try decoder.decode([LegacyStoredDay].self, from: savedData)
+            selectedDays = legacyDays.reduce(into: [:]) { result, storedDay in
+                guard let type = DayType(rawValue: storedDay.type), type != .default else {
+                    return
+                }
+                result[LocalDay(storedDay.date, calendar: calendar)] = type
+            }
+            saveSelectedDays()
+        } catch {
+            reportPersistenceError(
+                "Saved calendar data could not be read. It has been left untouched.",
+                error: error
+            )
+        }
+    }
+
+    private func makeDayDictionary(from storedDays: [StoredDay]) -> [LocalDay: DayType] {
+        storedDays.reduce(into: [:]) { result, storedDay in
+            guard let type = DayType(rawValue: storedDay.type), type != .default else {
+                return
+            }
+            result[storedDay.day] = type
+        }
+    }
+
+    private func reportPersistenceError(_ message: String, error: Error) {
+        persistenceErrorMessage = message
+        logger.error("\(message, privacy: .public) \(error.localizedDescription, privacy: .public)")
+    }
+
+    private static func loadDate(forKey key: String, defaults: UserDefaults) -> Date? {
+        if let date = defaults.object(forKey: key) as? Date {
+            return date
+        }
+
         let formatter = ISO8601DateFormatter()
-        if let dateString = UserDefaults.standard.string(forKey: key) {
+        if let dateString = defaults.string(forKey: key) {
             return formatter.date(from: dateString)
         }
         return nil
     }
-
-    // Toggle day type or reset to default
-    func toggleDayType(for date: Date) {
-        if let currentType = selectedDays[date] {
-            selectedDays[date] = currentType.next()
-            if selectedDays[date] == .default {
-                selectedDays.removeValue(forKey: date)
-            }
-        } else {
-            selectedDays[date] = .workFromOffice
-        }
-    }
-
-    // Calculate the RTO percentage for a given period
-    func calculateRTOPercentage(start: Date, end: Date, includeUnentered: Bool) -> String {
-        let normalizedStart = calendar.startOfDay(for: start)
-        let normalizedEnd = calendar.startOfDay(for: end)
-
-        // Generate all days in the range
-        var totalDays = 0
-        var workFromOfficeCount = 0
-        var workFromHomeCount = 0
-        var unenteredDaysCount = 0
-
-        var currentDate = normalizedStart
-        while currentDate <= normalizedEnd {
-            if !calendar.isDateInWeekend(currentDate) {
-                totalDays += 1
-                if let dayType = selectedDays[currentDate] {
-                    switch dayType {
-                    case .workFromOffice:
-                        workFromOfficeCount += 1
-                    case .workFromHome:
-                        workFromHomeCount += 1
-                    default:
-                        break
-                    }
-                } else {
-                    // Count unentered days
-                    unenteredDaysCount += 1
-                }
-            }
-            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-        }
-
-        // Determine the denominator based on the setting
-        let denominator = includeUnentered
-            ? (workFromOfficeCount + workFromHomeCount + unenteredDaysCount) // Include unentered days
-            : (workFromOfficeCount + workFromHomeCount) // Exclude unentered days
-
-        // Avoid division by zero
-        guard denominator > 0 else { return "0.00" }
-
-        let rtoPercentage = (Double(workFromOfficeCount) / Double(denominator)) * 100
-        return String(format: "%.2f", rtoPercentage)
-    }
-
-    // Calculate day counts for different day types within the selected period
-    func calculateDayCounts(start: Date, end: Date) -> DayCounts {
-        let normalizedStart = calendar.startOfDay(for: start)
-        let normalizedEnd = calendar.startOfDay(for: end)
-
-        // Generate all dates within the period
-        var currentDate = normalizedStart
-        var workFromOfficeCount = 0
-        var workFromHomeCount = 0
-        var leaveCount = 0
-        var totalDaysInRange = 0
-
-        while currentDate <= normalizedEnd {
-            // Skip weekends
-            if !calendar.isDateInWeekend(currentDate) {
-                totalDaysInRange += 1
-
-                if let dayType = selectedDays[currentDate] {
-                    switch dayType {
-                    case .workFromOffice:
-                        workFromOfficeCount += 1
-                    case .workFromHome:
-                        workFromHomeCount += 1
-                    case .leave:
-                        leaveCount += 1
-                    default:
-                        break
-                    }
-                }
-            }
-            // Move to the next day
-            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-        }
-
-        let unenteredCount = totalDaysInRange - (workFromOfficeCount + workFromHomeCount + leaveCount)
-
-        return DayCounts(
-            workFromOfficeCount: workFromOfficeCount,
-            workFromHomeCount: workFromHomeCount,
-            leaveCount: leaveCount,
-            unenteredCount: unenteredCount
-        )
-    }
-    
-    func calculateAdditionalDaysNeeded(start: Date, end: Date, targetRTO: Double, includeUnentered: Bool) -> Int {
-        let counts = calculateDayCounts(start: start, end: end)
-
-        let currentWorkFromOffice = counts.workFromOfficeCount
-        let denominator = includeUnentered
-            ? (counts.workFromOfficeCount + counts.workFromHomeCount + counts.unenteredCount)
-            : (counts.workFromOfficeCount + counts.workFromHomeCount)
-
-        guard denominator > 0 else { return Int(ceil(targetRTO / 100.0)) }
-
-        let targetNumerator = (targetRTO / 100.0) * Double(denominator)
-        let additionalNeeded = max(0, Int(ceil(targetNumerator - Double(currentWorkFromOffice))))
-        return additionalNeeded
-    }
-}
-
-// Struct for encapsulating day counts
-struct DayCounts {
-    let workFromOfficeCount: Int
-    let workFromHomeCount: Int
-    let leaveCount: Int
-    let unenteredCount: Int
-}
-
-// Helper struct for persistence
-struct EncodableDay: Codable {
-    let date: Date
-    let type: String
 }

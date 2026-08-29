@@ -8,22 +8,18 @@
 import SwiftUI
 
 struct SettingsButtonView: View {
-    @Binding var showSettings: Bool // Binding to control the sheet presentation
+    @Binding var showSettings: Bool
+    @ObservedObject var calendarViewModel: CalendarViewModel
 
     var body: some View {
-        Button(action: {
+        Button {
             showSettings = true
-        }) {
-            Image(systemName: "gearshape") // Use gear icon for settings
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24) // Set icon size
-                .foregroundColor(.blue) // Icon color
-                .padding(8) // Add padding for better tappable area
-                .background(Circle().fill(Color.blue.opacity(0.1))) // Circle background
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+                .frame(minHeight: 44)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView() // Present the settings screen
+            SettingsView(calendarViewModel: calendarViewModel)
         }
     }
 }

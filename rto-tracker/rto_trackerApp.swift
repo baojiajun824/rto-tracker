@@ -8,13 +8,13 @@
 import SwiftUI
 
 @main
-struct RTOApp: App { // Replace "RTOApp" with your app's name
-    @StateObject private var settingsViewModel = SettingsViewModel() // Instantiate the SettingsViewModel
+struct RTOApp: App {
+    @StateObject private var settingsViewModel = SettingsViewModel()
 
     var body: some Scene {
         WindowGroup {
             CalendarView()
-                .environmentObject(settingsViewModel) // Share the SettingsViewModel across all views
+                .environmentObject(settingsViewModel)
         }
     }
 }

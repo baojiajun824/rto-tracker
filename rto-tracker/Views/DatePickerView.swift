@@ -12,18 +12,43 @@ struct DatePickerView: View {
     let width: CGFloat
 
     var body: some View {
-        HStack(spacing: width * 0.1) {
-            VStack {
-                Text("Start Date")
-                    .font(.headline)
-                DatePicker("", selection: $viewModel.startDate, displayedComponents: .date)
+        VStack(spacing: 8) {
+            HStack(spacing: width * 0.08) {
+                VStack {
+                    Text("Start Date")
+                        .font(.headline)
+                    DatePicker(
+                        "Start Date",
+                        selection: $viewModel.startDate,
+                        displayedComponents: .date
+                    )
                     .labelsHidden()
+                    .accessibilityLabel("Start Date")
+                }
+                VStack {
+                    Text("End Date")
+                        .font(.headline)
+                    DatePicker(
+                        "End Date",
+                        selection: $viewModel.endDate,
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .accessibilityLabel("End Date")
+                }
             }
-            VStack {
-                Text("End Date")
-                    .font(.headline)
-                DatePicker("", selection: $viewModel.endDate, displayedComponents: .date)
-                    .labelsHidden()
+
+            if !viewModel.isDateRangeValid {
+                HStack {
+                    Label("Start date must be before end date.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                    Spacer()
+                    Button("Swap") {
+                        viewModel.swapDateRange()
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
             }
         }
         .frame(maxWidth: .infinity)

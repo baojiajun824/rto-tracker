@@ -9,10 +9,9 @@ import SwiftUI
 
 struct CalendarTitleView: View {
     var body: some View {
-        Text("✨ RTO Tracker ✨")
+        Label("RTO Tracker", systemImage: "calendar")
             .font(.largeTitle)
             .fontWeight(.bold)
-            .foregroundColor(.blue)
-            .shadow(color: .gray, radius: 2, x: 1, y: 2)
+            .foregroundStyle(.blue)
     }
 }
