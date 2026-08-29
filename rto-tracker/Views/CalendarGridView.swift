@@ -10,6 +10,7 @@ import SwiftUI
 struct CalendarGridView: View {
     @ObservedObject var viewModel: CalendarViewModel
     @Binding var currentDate: Date
+    let includeWeekendOffice: Bool
 
     private struct DayCell: Identifiable {
         enum ID: Hashable {
@@ -39,15 +40,32 @@ struct CalendarGridView: View {
                 ForEach(generateDays(for: currentDate)) { cell in
                     if let date = cell.date {
                         let isWeekend = Calendar.current.isDateInWeekend(date)
+                        let storedType = viewModel.dayType(for: date)
+                        let visibleType = isWeekend
+                            ? (includeWeekendOffice && storedType == .workFromOffice ? storedType : nil)
+                            : storedType
                         CalendarDayView(
                             date: date,
-                            dayType: viewModel.dayType(for: date),
-                            isInteractable: !isWeekend,
+                            dayType: visibleType,
+                            isInteractable: !isWeekend || includeWeekendOffice,
+                            selectionTypes: isWeekend
+                                ? [.workFromOffice]
+                                : [.workFromOffice, .workFromHome, .leave],
                             action: {
-                                viewModel.toggleDayType(for: date)
+                                if isWeekend {
+                                    viewModel.setDayType(
+                                        visibleType == .workFromOffice ? nil : .workFromOffice,
+                                        for: date
+                                    )
+                                } else {
+                                    viewModel.toggleDayType(for: date)
+                                }
                             },
                             selectionAction: { type in
-                                viewModel.setDayType(type, for: date)
+                                viewModel.setDayType(
+                                    isWeekend && type != .workFromOffice ? nil : type,
+                                    for: date
+                                )
                             }
                         )
                     } else {

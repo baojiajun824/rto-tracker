@@ -9,6 +9,7 @@ An optional missing-entry reminder can notify the user once on weekdays at a cho
 - Weekends and leave days are excluded.
 - By default, RTO is `office / (office + home)`.
 - When **Include Pending Days** is enabled, pending weekdays are also included in the denominator.
+- When **Allow Weekend Office Credit** is enabled, weekend office entries increase the office count without increasing the denominator. This can produce an RTO result above 100%.
 - If the selected goal cannot be reached with the pending days in the range, the app says so instead of showing an impossible recommendation.
 
 ## Data and privacy

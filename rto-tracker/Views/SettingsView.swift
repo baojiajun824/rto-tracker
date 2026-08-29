@@ -37,9 +37,15 @@ struct SettingsView: View {
                 Section("RTO Calculation") {
                     Toggle("Include Pending Days", isOn: $settingsViewModel.includePendingDays)
                         .toggleStyle(SwitchToggleStyle(tint: .green))
-                    Text("When enabled, pending weekdays count as non-office days in the percentage. Leave and weekends are always excluded.")
+                    Text("When enabled, pending weekdays count as non-office days in the percentage. Leave is always excluded.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    Toggle("Allow Weekend Office Credit", isOn: $settingsViewModel.includeWeekendOffice)
+                        .toggleStyle(SwitchToggleStyle(tint: .green))
+                    Text("When enabled, weekends can be marked only as Office or cleared. They add office credit without increasing total days, so RTO may exceed 100%.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Reminder") {

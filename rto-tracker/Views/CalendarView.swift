@@ -28,7 +28,8 @@ struct CalendarView: View {
                     monthNavigation(width: width)
                     CalendarGridView(
                         viewModel: viewModel,
-                        currentDate: $currentDate
+                        currentDate: $currentDate,
+                        includeWeekendOffice: settingsViewModel.includeWeekendOffice
                     )
                     LegendView()
                     SettingsButtonView(

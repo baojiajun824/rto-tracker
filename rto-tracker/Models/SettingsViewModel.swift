@@ -21,6 +21,12 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var includeWeekendOffice: Bool {
+        didSet {
+            defaults.set(includeWeekendOffice, forKey: Keys.includeWeekendOffice)
+        }
+    }
+
     @Published var reminderEnabled: Bool {
         didSet {
             defaults.set(reminderEnabled, forKey: Keys.reminderEnabled)
@@ -55,6 +61,7 @@ final class SettingsViewModel: ObservableObject {
     private enum Keys {
         static let rtoGoal = "rtoGoal"
         static let includePendingDays = "includePendingDays"
+        static let includeWeekendOffice = "includeWeekendOffice"
         static let reminderEnabled = "reminderEnabled"
         static let reminderMinutes = "reminderMinutes"
     }
@@ -65,6 +72,9 @@ final class SettingsViewModel: ObservableObject {
         self.defaults = defaults
         rtoGoal = defaults.object(forKey: Keys.rtoGoal) as? Double ?? 50
         includePendingDays = defaults.object(forKey: Keys.includePendingDays) as? Bool ?? false
+        includeWeekendOffice = defaults.object(forKey: Keys.includeWeekendOffice) == nil
+            ? false
+            : defaults.bool(forKey: Keys.includeWeekendOffice)
         reminderEnabled = defaults.object(forKey: Keys.reminderEnabled) == nil
             ? false
             : defaults.bool(forKey: Keys.reminderEnabled)
@@ -77,6 +87,7 @@ final class SettingsViewModel: ObservableObject {
     func resetToDefaults() {
         rtoGoal = 50
         includePendingDays = false
+        includeWeekendOffice = false
         reminderEnabled = false
         reminderMinutes = 15 * 60
     }

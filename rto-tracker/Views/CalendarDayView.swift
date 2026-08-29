@@ -18,6 +18,7 @@ struct CalendarDayView: View {
     let date: Date
     let dayType: DayType?
     let isInteractable: Bool
+    let selectionTypes: [DayType]
     let action: () -> Void
     let selectionAction: (DayType?) -> Void
 
@@ -29,7 +30,7 @@ struct CalendarDayView: View {
             }
             .buttonStyle(.plain)
             .contextMenu {
-                ForEach(directSelectionTypes, id: \.self) { type in
+                ForEach(selectionTypes, id: \.self) { type in
                     Button {
                         selectionAction(type)
                     } label: {
@@ -46,17 +47,15 @@ struct CalendarDayView: View {
             .accessibilityLabel(accessibilityDate)
             .accessibilityValue((dayType ?? .default).displayName)
             .accessibilityHint("Double tap to cycle. Long press to choose a day type.")
-            .accessibilityAction(named: "Set Office") {
-                selectionAction(.workFromOffice)
-            }
-            .accessibilityAction(named: "Set Home") {
-                selectionAction(.workFromHome)
-            }
-            .accessibilityAction(named: "Set Leave") {
-                selectionAction(.leave)
-            }
-            .accessibilityAction(named: "Clear") {
-                selectionAction(nil)
+            .accessibilityActions {
+                ForEach(selectionTypes, id: \.self) { type in
+                    Button("Set \(type.displayName)") {
+                        selectionAction(type)
+                    }
+                }
+                Button("Clear") {
+                    selectionAction(nil)
+                }
             }
         } else {
             content
@@ -83,10 +82,6 @@ struct CalendarDayView: View {
 
     private var statusType: DayType {
         dayType ?? .default
-    }
-
-    private var directSelectionTypes: [DayType] {
-        [.workFromOffice, .workFromHome, .leave]
     }
 
     private var accessibilityDate: String {

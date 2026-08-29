@@ -17,10 +17,12 @@ struct RTOStatusView: View {
         VStack(spacing: max(height * 0.015, 10)) {
             if let summary = viewModel.summary(
                 targetRTO: settingsViewModel.rtoGoal,
-                includePendingDays: settingsViewModel.includePendingDays
+                includePendingDays: settingsViewModel.includePendingDays,
+                includeWeekendOffice: settingsViewModel.includeWeekendOffice
             ) {
                 percentageStatus(summary)
                 recommendation(summary)
+                weekendCreditNote(summary)
 
                 HStack(spacing: max(width * 0.025, 6)) {
                     countItem(
@@ -59,6 +61,20 @@ struct RTOStatusView: View {
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func weekendCreditNote(_ summary: RTOSummary) -> some View {
+        if summary.counts.weekendOfficeCount > 0 {
+            Text(
+                "\(summary.counts.weekendOfficeCount) weekend "
+                + (summary.counts.weekendOfficeCount == 1 ? "office day counts" : "office days count")
+                + " as credit without increasing total days."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
         }
     }
 

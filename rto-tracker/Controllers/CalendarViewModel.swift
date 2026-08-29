@@ -105,13 +105,18 @@ final class CalendarViewModel: ObservableObject {
         saveSelectedDays()
     }
 
-    func summary(targetRTO: Double, includePendingDays: Bool) -> RTOSummary? {
+    func summary(
+        targetRTO: Double,
+        includePendingDays: Bool,
+        includeWeekendOffice: Bool = false
+    ) -> RTOSummary? {
         RTOCalculator.summary(
             selectedDays: selectedDays,
             start: startDate,
             end: endDate,
             targetRTO: targetRTO,
             includePendingDays: includePendingDays,
+            includeWeekendOffice: includeWeekendOffice,
             calendar: calendar
         )
     }

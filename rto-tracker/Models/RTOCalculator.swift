@@ -5,9 +5,28 @@ struct DayCounts: Equatable {
     let workFromHomeCount: Int
     let leaveCount: Int
     let unenteredCount: Int
+    let weekendOfficeCount: Int
+
+    init(
+        workFromOfficeCount: Int,
+        workFromHomeCount: Int,
+        leaveCount: Int,
+        unenteredCount: Int,
+        weekendOfficeCount: Int = 0
+    ) {
+        self.workFromOfficeCount = workFromOfficeCount
+        self.workFromHomeCount = workFromHomeCount
+        self.leaveCount = leaveCount
+        self.unenteredCount = unenteredCount
+        self.weekendOfficeCount = weekendOfficeCount
+    }
+
+    var weekdayOfficeCount: Int {
+        workFromOfficeCount - weekendOfficeCount
+    }
 
     var enteredWorkdayCount: Int {
-        workFromOfficeCount + workFromHomeCount
+        weekdayOfficeCount + workFromHomeCount
     }
 }
 
@@ -33,6 +52,7 @@ enum RTOCalculator {
         end: Date,
         targetRTO: Double,
         includePendingDays: Bool,
+        includeWeekendOffice: Bool = false,
         calendar: Calendar = .current
     ) -> RTOSummary? {
         guard calendar.startOfDay(for: start) <= calendar.startOfDay(for: end) else {
@@ -43,6 +63,7 @@ enum RTOCalculator {
             selectedDays: selectedDays,
             start: start,
             end: end,
+            includeWeekendOffice: includeWeekendOffice,
             calendar: calendar
         )
         let denominator = counts.enteredWorkdayCount
@@ -72,6 +93,7 @@ enum RTOCalculator {
         selectedDays: [LocalDay: DayType],
         start: Date,
         end: Date,
+        includeWeekendOffice: Bool = false,
         calendar: Calendar = .current
     ) -> DayCounts {
         let normalizedStart = calendar.startOfDay(for: start)
@@ -90,9 +112,16 @@ enum RTOCalculator {
         var home = 0
         var leave = 0
         var pending = 0
+        var weekendOffice = 0
 
         while currentDate <= normalizedEnd {
-            if !calendar.isDateInWeekend(currentDate) {
+            if calendar.isDateInWeekend(currentDate) {
+                if includeWeekendOffice,
+                   selectedDays[LocalDay(currentDate, calendar: calendar)] == .workFromOffice {
+                    office += 1
+                    weekendOffice += 1
+                }
+            } else {
                 switch selectedDays[LocalDay(currentDate, calendar: calendar)] {
                 case .workFromOffice:
                     office += 1
@@ -115,7 +144,8 @@ enum RTOCalculator {
             workFromOfficeCount: office,
             workFromHomeCount: home,
             leaveCount: leave,
-            unenteredCount: pending
+            unenteredCount: pending,
+            weekendOfficeCount: weekendOffice
         )
     }
 

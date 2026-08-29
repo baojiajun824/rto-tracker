@@ -111,6 +111,62 @@ final class RTOTrackerTests: XCTestCase {
         XCTAssertFalse(summary.canMeetGoalWithPendingDays)
     }
 
+    func testWeekendOfficeCreditIncreasesNumeratorWithoutIncreasingDenominator() throws {
+        let monday = try date(2025, 1, 6)
+        let sunday = try date(2025, 1, 12)
+        let selections: [LocalDay: DayType] = [
+            LocalDay(monday, calendar: calendar): .workFromOffice,
+            LocalDay(try date(2025, 1, 7), calendar: calendar): .workFromOffice,
+            LocalDay(try date(2025, 1, 8), calendar: calendar): .workFromOffice,
+            LocalDay(try date(2025, 1, 9), calendar: calendar): .workFromOffice,
+            LocalDay(try date(2025, 1, 10), calendar: calendar): .workFromOffice,
+            LocalDay(try date(2025, 1, 11), calendar: calendar): .workFromOffice
+        ]
+
+        let summary = try XCTUnwrap(
+            RTOCalculator.summary(
+                selectedDays: selections,
+                start: monday,
+                end: sunday,
+                targetRTO: 100,
+                includePendingDays: false,
+                includeWeekendOffice: true,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertEqual(summary.counts.workFromOfficeCount, 6)
+        XCTAssertEqual(summary.counts.weekendOfficeCount, 1)
+        XCTAssertEqual(summary.counts.enteredWorkdayCount, 5)
+        XCTAssertEqual(try XCTUnwrap(summary.percentage), 120, accuracy: 0.001)
+    }
+
+    func testWeekendOfficeEntryIsIgnoredWhenSettingIsDisabled() throws {
+        let monday = try date(2025, 1, 6)
+        let saturday = try date(2025, 1, 11)
+        let selections: [LocalDay: DayType] = [
+            LocalDay(monday, calendar: calendar): .workFromOffice,
+            LocalDay(saturday, calendar: calendar): .workFromOffice
+        ]
+
+        let summary = try XCTUnwrap(
+            RTOCalculator.summary(
+                selectedDays: selections,
+                start: monday,
+                end: saturday,
+                targetRTO: 50,
+                includePendingDays: false,
+                includeWeekendOffice: false,
+                calendar: calendar
+            )
+        )
+
+        XCTAssertEqual(summary.counts.workFromOfficeCount, 1)
+        XCTAssertEqual(summary.counts.weekendOfficeCount, 0)
+        XCTAssertEqual(try XCTUnwrap(summary.percentage), 100, accuracy: 0.001)
+        XCTAssertEqual(selections[LocalDay(saturday, calendar: calendar)], .workFromOffice)
+    }
+
     func testInvalidRangeHasNoSummary() throws {
         XCTAssertNil(
             RTOCalculator.summary(
@@ -202,6 +258,20 @@ final class RTOTrackerTests: XCTestCase {
         let reloadedSettings = SettingsViewModel(defaults: defaults)
         XCTAssertTrue(reloadedSettings.reminderEnabled)
         XCTAssertEqual(reloadedSettings.reminderMinutes, (17 * 60) + 30)
+    }
+
+    @MainActor
+    func testWeekendOfficeSettingDefaultsOffAndPersistsLocally() throws {
+        let defaults = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
+        let settings = SettingsViewModel(defaults: defaults)
+
+        XCTAssertFalse(settings.includeWeekendOffice)
+
+        settings.includeWeekendOffice = true
+
+        let reloadedSettings = SettingsViewModel(defaults: defaults)
+        XCTAssertTrue(reloadedSettings.includeWeekendOffice)
     }
 
     @MainActor
