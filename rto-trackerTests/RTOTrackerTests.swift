@@ -275,6 +275,22 @@ final class RTOTrackerTests: XCTestCase {
     }
 
     @MainActor
+    func testRTOGoalNormalizesLegacyAndNewFractionalValues() throws {
+        let defaults = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
+        defaults.set(50.1, forKey: "rtoGoal")
+
+        let settings = SettingsViewModel(defaults: defaults)
+
+        XCTAssertEqual(settings.rtoGoal, 50)
+        XCTAssertEqual(defaults.double(forKey: "rtoGoal"), 50)
+
+        settings.rtoGoal = 50.9
+        XCTAssertEqual(settings.rtoGoal, 51)
+        XCTAssertEqual(defaults.double(forKey: "rtoGoal"), 51)
+    }
+
+    @MainActor
     func testDirectSelectionPersistsAndCanClearADay() throws {
         let defaults = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }

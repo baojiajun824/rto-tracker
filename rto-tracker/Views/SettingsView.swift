@@ -25,7 +25,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Goal")
                         Spacer()
-                        Text("\(Int(settingsViewModel.rtoGoal))%")
+                        Text("\(Int(settingsViewModel.rtoGoal.rounded()))%")
                     }
                     Slider(
                         value: $settingsViewModel.rtoGoal,

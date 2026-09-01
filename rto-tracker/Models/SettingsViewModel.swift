@@ -9,9 +9,19 @@ import Foundation
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
-    @Published var rtoGoal: Double {
-        didSet {
-            defaults.set(rtoGoal, forKey: Keys.rtoGoal)
+    @Published private var storedRTOGoal: Double
+
+    var rtoGoal: Double {
+        get {
+            storedRTOGoal
+        }
+        set {
+            let normalizedGoal = Self.normalizedGoal(newValue)
+            guard storedRTOGoal != normalizedGoal else {
+                return
+            }
+            storedRTOGoal = normalizedGoal
+            defaults.set(normalizedGoal, forKey: Keys.rtoGoal)
         }
     }
 
@@ -70,7 +80,8 @@ final class SettingsViewModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        rtoGoal = defaults.object(forKey: Keys.rtoGoal) as? Double ?? 50
+        let savedGoal = (defaults.object(forKey: Keys.rtoGoal) as? NSNumber)?.doubleValue ?? 50
+        storedRTOGoal = Self.normalizedGoal(savedGoal)
         includePendingDays = defaults.object(forKey: Keys.includePendingDays) as? Bool ?? false
         includeWeekendOffice = defaults.object(forKey: Keys.includeWeekendOffice) == nil
             ? false
@@ -82,6 +93,10 @@ final class SettingsViewModel: ObservableObject {
             ? 15 * 60
             : defaults.integer(forKey: Keys.reminderMinutes)
         reminderMinutes = min(max(storedMinutes, 0), (24 * 60) - 1)
+
+        if savedGoal != storedRTOGoal {
+            defaults.set(storedRTOGoal, forKey: Keys.rtoGoal)
+        }
     }
 
     func resetToDefaults() {
@@ -90,5 +105,12 @@ final class SettingsViewModel: ObservableObject {
         includeWeekendOffice = false
         reminderEnabled = false
         reminderMinutes = 15 * 60
+    }
+
+    private static func normalizedGoal(_ value: Double) -> Double {
+        guard value.isFinite else {
+            return 50
+        }
+        return min(max(value.rounded(), 0), 100)
     }
 }
